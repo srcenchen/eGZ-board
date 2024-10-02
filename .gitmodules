@@ -1,0 +1,3 @@
+[submodule "board-front"]
+	path = board-front
+	url = .\\board-front\\
