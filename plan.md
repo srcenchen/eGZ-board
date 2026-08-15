@@ -368,3 +368,56 @@
 8. 倒计时与正计时都支持并正确展示天数。
 9. 展示端在无任何数据/断网时仍能正常显示不崩溃。
 10. 敏感信息不出现在任何接口响应与日志中。
+
+---
+
+## 附录 A：天气接入技术细节（取自旧版代码，开发方沿用或重构）
+
+> 本附录是唯一被保留的旧版技术细节（用户指定从旧代码提取）。其余功能一律按正文产品需求全新设计。
+
+### A.1 天气服务商
+
+**和风天气（QWeather）**。旧版为服务端代理 + 缓存 + 定时刷新模式，新版应沿用该模式（大屏不直接请求第三方）。
+
+### A.2 配置项
+
+| 项 | 取值 | 说明 |
+| --- | --- | --- |
+| 查询 key | `QWEATHER_KEY` | 环境变量；无 key 时天气功能静默跳过，不报错 |
+| 位置 | `QWEATHER_LOCATION` | 经纬度，如 `119.15,34.81`；缺省用该默认值 |
+| 基地址 | `QWEATHER_BASE_URL` | 默认 `https://devapi.qweather.com`；必须是绝对 HTTP(S) URL |
+
+- 新版应把「位置」并入后台 `system_settings.weather.location`（正文 §4.10），key 仍可用环境变量或后台录入（不回显）；基地址保持默认即可。
+
+### A.3 代理端点与缓存
+
+服务端定时（旧版每 3 分钟）拉取三类数据并缓存到本地表 `weather_cache(key, value)`（upsert by key）：
+
+| 缓存 key | 和风路径 | 说明 |
+| --- | --- | --- |
+| `now` | `/v7/weather/now` | 当前天气 |
+| `3d` | `/v7/weather/3d` | 未来 3 天预报 |
+| `rain` | `/v7/minutely/5m` | 分钟级降雨 |
+
+- 请求参数：`location`、`key`，即 `GET {baseURL}{path}?location=...&key=...`。
+- 校验响应 JSON 的 `code == "200"`，否则视为失败；成功则把**原始响应体**原样写入缓存。
+- 刷新并发互斥：同一时刻只允许一次刷新，未完成时不重复触发。
+- 定时刷新失败仅记日志，不影响已缓存数据。
+
+### A.4 对外接口
+
+- 大屏/前台通过 `GET /api/proxy/get-weather?key=now|3d|rain` 读取**缓存**（不直连第三方），返回 `{data:{key, value(原始 JSON), updatedAt}}`。
+
+### A.5 前端解析与渲染（旧版表现，作为参考）
+
+- 前端读取缓存 `value` 后 `JSON.parse`，字段：
+  - `now`：`updateTime`、`now.{icon,temp,text,windDir,windScale,humidity,feelsLike}`。
+  - `3d`：`daily[]`，每项 `{fxDate, iconDay, tempMax, tempMin}`。
+  - `rain`：`summary`（降雨概况文字）。
+- 天气图标用和风静态图：`https://a.hecdn.net/img/common/icon/202106d/{iconCode}.png`。
+- 前端解析失败 → 显示"天气数据暂不可用"；成功 → 展示：当前温度/天气现象、风力、湿度、体感、"未来 3 天"、降雨概况（对应正文 §2.1 ⑤）。
+
+### A.6 通用 HTTP 行为（旧版，供参考）
+
+- 超时 10 秒；响应体限读 10MB；非 2xx 视为失败并携带响应体文本。
+- 读取 `Value` 字符串再 `JSON.parse`，不直接透传第三方 JSON 结构。
