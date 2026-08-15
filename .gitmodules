@@ -1,6 +1,0 @@
-[submodule "board-front"]
-	path = board-front
-	url = .\\board-front\\
-[submodule "eGZ-board-front"]
-	path = eGZ-board-front
-	url = https://github.com/srcenchen/eGZ-board-front.git

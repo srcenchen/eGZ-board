@@ -1,21 +1,25 @@
-.buildpath
-.hgignore.swp
-.project
-.orig
-.swp
-.idea/
-.settings/
-.vscode/
+# 依赖与构建
+*.exe
+*.test
+*.out
 bin/
-**/.DS_Store
-gf
-main
-main.exe
-output/
-manifest/output/
-temp/
-temp.yaml
-bin
-**/config/config.yaml
-edits.md
+web/dist/
+public/
+
+# 运行时数据（数据库、上传文件）
 resource/
+
+# 环境与编辑器
+.idea/
+.vscode/
+.settings/
+**/.DS_Store
+.env
+*.local
+
+# 提交工作流
+edits.md
+
+# 临时文件
+temp/
+*.tmp
