@@ -1,19 +1,28 @@
 package utility
 
 import (
-	"eGZ-Board/internal/model"
-	"eGZ-Board/internal/model/entity"
+	"eGZ-Board/internal/dao"
+	"fmt"
+
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
 )
 
-func GetClassID(ctx g.Ctx) int {
-	// 从 context 中获取 *ghttp.Request
+func GetClassID(ctx g.Ctx) (int, error) {
 	r := ghttp.RequestFromCtx(ctx)
-
-	// 获取访问者 IP 地址
+	if r == nil {
+		return 0, fmt.Errorf("request context is unavailable")
+	}
 	clientIP := r.GetClientIp()
-	var deviceTable entity.DeviceTable
-	model.GetDatabase().Where("device_ID = ?", clientIP).First(&deviceTable)
-	return deviceTable.ClassID
+	device, err := dao.GetDevice(clientIP)
+	if err != nil {
+		if dao.IsNotFound(err) {
+			return 0, fmt.Errorf("device %s is not bound to a class", clientIP)
+		}
+		return 0, fmt.Errorf("resolve device class: %w", err)
+	}
+	if device.ClassID <= 0 {
+		return 0, fmt.Errorf("device %s has an invalid class binding", clientIP)
+	}
+	return device.ClassID, nil
 }

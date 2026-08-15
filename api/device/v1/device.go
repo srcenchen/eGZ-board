@@ -16,8 +16,8 @@ type IsBindRes struct {
 
 type BindDeviceReq struct {
 	g.Meta `method:"post"`
-	Grade  int    `json:"grade"`
-	Class  string `json:"class"`
+	Grade  int `json:"grade" v:"between:1,3#年级必须为1到3"`
+	Class  int `json:"class" v:"between:1,24#班级必须为1到24"`
 }
 
 type BindDeviceRes struct {

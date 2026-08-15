@@ -41,17 +41,19 @@
 - **路由注册**：全部集中在 `internal/cmd/cmd.go`，以 `/api/<module>` 分组绑定各模块 `NewV1()`。
 - **路由命名**：GoFrame 由控制器方法名自动生成 URL，如 `GetSettingValue -> /setting/get-setting-value`（蛇形）。
 - **响应包裹**：`/api` 分组挂载 `ghttp.MiddlewareHandlerResponse`，所有响应统一为 `{code, message, data}`，前端读取 `res.data.data.<...>`。
-- **多班级隔离**：无登录态。通过客户端 IP 在 `device` 表查班级（`utility.GetClassID(ctx)`），设备绑定/解绑即增删 `device` 记录。
+- **多班级隔离**：无登录态。通过客户端 IP 在 `device` 表查班级（`utility.GetClassID(ctx)` 返回 `(int, error)`），未绑定请求必须返回错误；设备绑定按 IP upsert、解绑删除记录。IP 绑定不是认证，认证/授权仍是已知限制。
 - **API 定义层**：`api/<module>/v1/*.go` 内的 Req/Res 是唯一契约来源。新增接口 = 加 Req/Res 结构体 + 加接口方法 + controller 实现。顶层 `api/<module>/<module>.go` 与 `internal/controller/<module>/*_new.go` 为 GoFrame CLI 生成，`DO NOT EDIT` 头可保留但要与新方法保持同步。
-- **service 层**：当前承载天气代理（`service/WeatherProxy` + `gcron` 每 3 分钟刷新，`service/proxy_timer.go`）。
+- **service 层**：当前承载天气代理（`service.WeatherProxy` + `gcron` 每 3 分钟刷新，`service/proxy_timer.go`）。天气配置来自 `QWEATHER_KEY`、`QWEATHER_LOCATION`、`QWEATHER_BASE_URL`，禁止提交 API key；无 key 时跳过刷新。
 
 ## 数据库约定
 
 - 单文件 SQLite：`resource/database/data.db`（`resource/database` 与 `resource/upload` 由 `main.go initPath()` 自动创建）。
 - 实体放 `internal/model/entity/`，全部用 GORM tag（`gorm:"primary_key;auto_increment;not null"`），主键为 `Id`。
-- 表结构变更：修改实体后依赖 `AutoMigrate` 自动迁移（`model.InitData()`）。新表需加入 `AutoMigrate` 调用。
+- 表结构变更：修改实体后依赖 `AutoMigrate` 自动迁移（`model.InitData(path)` 返回错误）。新表需加入 `AutoMigrate` 调用；自然唯一索引创建前必须安全处理历史重复数据，不得丢失仍被引用的班级关系。
 - 初始数据种子也在 `model.InitData()`，注意只首次（id=1 用户不存在时）写入。
 - 新增数据访问方法统一封装进 `internal/dao/`，controller 不要直接写 SQL。
+- SQLite 启用 5 秒 busy timeout、foreign keys 与 WAL；测试通过 `model.SetDatabase` 注入独立内存/临时数据库，禁止使用生产数据库。
+- HTTP 静态资源仅挂载 `/resource/upload`，关闭目录列表；不得公开 `resource/database`。
 
 ## 前后端 API 规则
 

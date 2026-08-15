@@ -9,6 +9,13 @@ import (
 )
 
 func (c *ControllerV1) GetSettingValue(ctx context.Context, req *v1.GetSettingValueReq) (res *v1.GetSettingValueRes, err error) {
-	res = &v1.GetSettingValueRes{Res: dao.GetSetting(req.Key, utility.GetClassID(ctx))}
-	return
+	classID, err := utility.GetClassID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	setting, err := dao.GetSetting(req.Key, classID)
+	if err != nil {
+		return nil, err
+	}
+	return &v1.GetSettingValueRes{Res: setting}, nil
 }

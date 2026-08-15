@@ -3,87 +3,87 @@ package schedule
 import (
 	"context"
 	"eGZ-Board/api/schedule/v1"
-	"eGZ-Board/internal/model"
-	"eGZ-Board/internal/model/entity"
+	"eGZ-Board/internal/dao"
 	"eGZ-Board/utility"
 	"encoding/json"
 	"fmt"
-	"github.com/gogf/gf/v2/util/gconv"
-	"github.com/gogf/gf/v2/util/grand"
-	"github.com/xuri/excelize/v2"
-	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/xuri/excelize/v2"
 )
 
 func (c *ControllerV1) UploadSchedule(ctx context.Context, req *v1.UploadScheduleReq) (res *v1.UploadScheduleRes, err error) {
-	_ = req
-	_ = ctx
-	file := req.File                               // 获取文件
-	file.Filename = strings.ToLower(file.Filename) // 降为小写
-	timeStamp := gconv.String(time.Now().Unix())   // 获取时间戳
-	randomFileName := grand.Letters(16)            // 生成16位随机字符串
-	file.Filename = timeStamp + randomFileName + path.Ext(file.Filename)
-	fileName, err := file.Save("./resource/upload")
-	// 打开 Excel 文件
-	f, err := excelize.OpenFile("./resource/upload/" + fileName)
+	originalName := filepath.Base(req.File.Filename)
+	if strings.ToLower(filepath.Ext(originalName)) != ".xlsx" {
+		return nil, fmt.Errorf("schedule file must be .xlsx")
+	}
+
+	fileName, err := req.File.Save("./resource/upload", true)
 	if err != nil {
-		log.Fatalf("Failed to open file: %v", err)
+		return nil, fmt.Errorf("save schedule upload: %w", err)
 	}
-
-	// 获取第一个工作表的名称
-	sheetName := f.GetSheetName(0)
-	if sheetName == "" {
-		log.Fatalf("Sheet name is empty")
-	}
-
-	// 获取工作表的所有列数据
-	cols, err := f.GetRows(sheetName)
-	if err != nil {
-		log.Fatalf("Failed to get columns: %v", err)
-	}
-
-	// 定义数据结构
-	data := map[string][]string{}
-
-	// 跳过标题行，从第二行开始读取数据
-	for i, col := range cols {
-		if i == 0 {
-			// 跳过标题行
-			continue
+	filePath := filepath.Join("./resource/upload", fileName)
+	defer func() {
+		if removeErr := os.Remove(filePath); err == nil && removeErr != nil && !os.IsNotExist(removeErr) {
+			err = fmt.Errorf("remove temporary schedule: %w", removeErr)
+			res = nil
 		}
+	}()
 
-		for j := 1; j < len(col); j++ {
-			data[strconv.Itoa(j)] = append(data[strconv.Itoa(j)], col[j])
-		}
-	}
-
-	// 将数据转换为 JSON
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		log.Fatalf("Failed to marshal JSON: %v", err)
-	}
-
-	// 打印 JSON 数据
-	fmt.Println(string(jsonData))
-	// 判断是否存在课程表
-	var scheduleTable entity.ScheduleTable
-	if model.GetDatabase().Where("class = ?", utility.GetClassID(ctx)).First(&scheduleTable).RowsAffected == 0 {
-		model.GetDatabase().Create(&entity.ScheduleTable{Schedule: string(jsonData), Class: utility.GetClassID(ctx)})
-	} else {
-		model.GetDatabase().Where("class = ?", utility.GetClassID(ctx)).First(&scheduleTable)
-		scheduleTable.Schedule = string(jsonData)
-		model.GetDatabase().Save(&scheduleTable)
-	}
-	err = os.Remove("./resource/upload/" + fileName)
+	data, err := parseSchedule(filePath)
 	if err != nil {
 		return nil, err
 	}
-	res = &v1.UploadScheduleRes{
-		FileName: fileName,
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("encode schedule: %w", err)
 	}
-	return
+	classID, err := utility.GetClassID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := dao.UpsertSchedule(classID, string(jsonData)); err != nil {
+		return nil, fmt.Errorf("store schedule: %w", err)
+	}
+	return &v1.UploadScheduleRes{FileName: originalName}, nil
+}
+
+func parseSchedule(filePath string) (data map[string][]string, err error) {
+	workbook, err := excelize.OpenFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("open schedule workbook: %w", err)
+	}
+	defer func() {
+		if closeErr := workbook.Close(); err == nil && closeErr != nil {
+			data = nil
+			err = fmt.Errorf("close schedule workbook: %w", closeErr)
+		}
+	}()
+
+	sheetName := workbook.GetSheetName(0)
+	if sheetName == "" {
+		return nil, fmt.Errorf("schedule workbook has no worksheet")
+	}
+	rows, err := workbook.GetRows(sheetName)
+	if err != nil {
+		return nil, fmt.Errorf("read schedule worksheet: %w", err)
+	}
+	if len(rows) < 2 {
+		return nil, fmt.Errorf("schedule worksheet has no data rows")
+	}
+
+	data = make(map[string][]string)
+	for _, row := range rows[1:] {
+		for column := 1; column < len(row); column++ {
+			key := strconv.Itoa(column)
+			data[key] = append(data[key], row[column])
+		}
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("schedule worksheet has no course columns")
+	}
+	return data, nil
 }

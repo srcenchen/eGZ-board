@@ -7,6 +7,7 @@ import (
 	"eGZ-Board/internal/controller/proxy"
 	"eGZ-Board/internal/controller/schedule"
 	"eGZ-Board/internal/controller/setting"
+	"strings"
 
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
@@ -20,11 +21,15 @@ var (
 		Brief: "start http server",
 		Func: func(ctx context.Context, parser *gcmd.Parser) (err error) {
 			s := g.Server()
-			// 静态资源绑定
-			s.SetIndexFolder(true)
-			s.AddStaticPath("/resource", "./resource")
+			s.SetIndexFolder(false)
+			s.AddStaticPath("/resource/upload", "./resource/upload")
 			s.SetServerRoot("public")
 			s.BindStatusHandler(404, func(r *ghttp.Request) {
+				if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" {
+					r.Response.Header().Set("Content-Type", "application/json; charset=utf-8")
+					r.Response.WriteJson(g.Map{"code": 404, "message": "API route not found", "data": nil})
+					return
+				}
 				r.Response.ServeFile("public/index.html")
 			})
 			api := s.Group("/api", func(group *ghttp.RouterGroup) {

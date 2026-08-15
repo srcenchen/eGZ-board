@@ -2,8 +2,7 @@ package device
 
 import (
 	"context"
-	"eGZ-Board/internal/model"
-	"eGZ-Board/internal/model/entity"
+	"eGZ-Board/internal/dao"
 	"github.com/gogf/gf/v2/net/ghttp"
 
 	"eGZ-Board/api/device/v1"
@@ -15,10 +14,10 @@ func (c *ControllerV1) GetClass(ctx context.Context, req *v1.GetClassReq) (res *
 
 	// 获取访问者 IP 地址
 	clientIP := r.GetClientIp()
-	var deviceTable entity.DeviceTable
-	var classTable entity.ClassTable
-	model.GetDatabase().Where("device_ID = ?", clientIP).First(&deviceTable)
-	model.GetDatabase().Where("id = ?", deviceTable.ClassID).First(&classTable)
+	classTable, err := dao.GetClassByDevice(clientIP)
+	if err != nil {
+		return nil, err
+	}
 	res = &v1.GetClassRes{
 		Grade: classTable.Grade,
 		Class: classTable.Class,

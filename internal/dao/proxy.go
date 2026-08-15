@@ -3,21 +3,21 @@ package dao
 import (
 	"eGZ-Board/internal/model"
 	"eGZ-Board/internal/model/entity"
+
+	"gorm.io/gorm/clause"
 )
 
 // SetWeather Set
-func SetWeather(key string, value string) {
-	var weatherTable entity.WeatherTable
-	if model.GetDatabase().Where("key = ?", key).First(&weatherTable).RowsAffected == 1 {
-		weatherTable.Value = value
-		model.GetDatabase().Save(&weatherTable)
-	} else {
-		model.GetDatabase().Create(&entity.WeatherTable{Key: key, Value: value})
-	}
+func SetWeather(key string, value string) error {
+	weather := entity.WeatherTable{Key: key, Value: value}
+	return model.GetDatabase().Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "key"}},
+		DoUpdates: clause.AssignmentColumns([]string{"value"}),
+	}).Create(&weather).Error
 }
 
-func GetWeather(key string) entity.WeatherTable {
+func GetWeather(key string) (entity.WeatherTable, error) {
 	var weatherTable entity.WeatherTable
-	model.GetDatabase().Where("key = ?", key).First(&weatherTable)
-	return weatherTable
+	err := model.GetDatabase().Where("key = ?", key).First(&weatherTable).Error
+	return weatherTable, err
 }

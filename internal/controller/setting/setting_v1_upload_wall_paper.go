@@ -2,26 +2,54 @@ package setting
 
 import (
 	"context"
-	"github.com/gogf/gf/v2/util/gconv"
-	"github.com/gogf/gf/v2/util/grand"
-	"path"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
-	"time"
 
 	"eGZ-Board/api/setting/v1"
 )
 
+var wallpaperTypes = map[string]string{
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".png":  "image/png",
+	".webp": "image/webp",
+}
+
 func (c *ControllerV1) UploadWallPaper(ctx context.Context, req *v1.UploadWallPaperReq) (res *v1.UploadWallPaperRes, err error) {
-	_ = req
-	_ = ctx
-	file := req.File                               // 获取文件
-	file.Filename = strings.ToLower(file.Filename) // 降为小写
-	timeStamp := gconv.String(time.Now().Unix())   // 获取时间戳
-	randomFileName := grand.Letters(16)            // 生成16位随机字符串
-	file.Filename = timeStamp + randomFileName + path.Ext(file.Filename)
-	fileName, err := file.Save("./resource/upload")
-	res = &v1.UploadWallPaperRes{
-		FileName: fileName,
+	extension := strings.ToLower(filepath.Ext(req.File.Filename))
+	expectedType, allowed := wallpaperTypes[extension]
+	if !allowed {
+		return nil, fmt.Errorf("wallpaper must be jpg, jpeg, png, or webp")
 	}
-	return
+	upload, err := req.File.Open()
+	if err != nil {
+		return nil, fmt.Errorf("open wallpaper upload: %w", err)
+	}
+	buffer := make([]byte, 512)
+	n, readErr := io.ReadFull(upload, buffer)
+	if readErr != nil && readErr != io.ErrUnexpectedEOF {
+		upload.Close()
+		return nil, fmt.Errorf("read wallpaper upload: %w", readErr)
+	}
+	if err := upload.Close(); err != nil {
+		return nil, fmt.Errorf("close wallpaper upload: %w", err)
+	}
+	detectedType := http.DetectContentType(buffer[:n])
+	if detectedType != expectedType {
+		return nil, fmt.Errorf("wallpaper content type %s does not match extension %s", detectedType, extension)
+	}
+
+	fileName, err := req.File.Save("./resource/upload", true)
+	if err != nil {
+		return nil, fmt.Errorf("save wallpaper upload: %w", err)
+	}
+	if filepath.Dir(fileName) != "." {
+		_ = os.Remove(filepath.Join("./resource/upload", fileName))
+		return nil, fmt.Errorf("invalid wallpaper filename")
+	}
+	return &v1.UploadWallPaperRes{FileName: fileName}, nil
 }

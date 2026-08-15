@@ -2,7 +2,7 @@ package device
 
 import (
 	"context"
-	"eGZ-Board/internal/model"
+	"eGZ-Board/internal/dao"
 	"eGZ-Board/internal/model/entity"
 	"github.com/gogf/gf/v2/net/ghttp"
 
@@ -15,8 +15,13 @@ func (c *ControllerV1) IsBind(ctx context.Context, req *v1.IsBindReq) (res *v1.I
 
 	// 获取访问者 IP 地址
 	clientIP := r.GetClientIp()
-	var deviceTable entity.DeviceTable
-	model.GetDatabase().Where("device_ID = ?", clientIP).First(&deviceTable)
+	deviceTable, err := dao.GetDevice(clientIP)
+	if err != nil {
+		if !dao.IsNotFound(err) {
+			return nil, err
+		}
+		deviceTable = entity.DeviceTable{}
+	}
 	res = &v1.IsBindRes{
 		Device: deviceTable,
 	}
