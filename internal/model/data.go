@@ -41,7 +41,7 @@ func InitData() {
 				GetDatabase().Create(&entity.SettingTable{Key: "wall_url", Value: "https://bing.img.run/1920x1080.php", Class: classTable.Id})
 				GetDatabase().Create(&entity.SettingTable{Key: "notice", Value: "<h2 style=\"text-align: center;\">本周任务</h2><p>注意：字体大小不允许超过H2</p>", Class: classTable.Id})
 				GetDatabase().Create(&entity.SettingTable{Key: "notice_switch", Value: "false", Class: classTable.Id})
-				GetDatabase().Create(&entity.CountDownTable{Event: "高考", Date: "2025-6-6", Class: classTable.Id, Type: "count"})
+				GetDatabase().Create(&entity.CountDownTable{Event: "高考", Date: "2025-6-7", Class: classTable.Id, Type: "count"})
 			}
 		}
 	}
